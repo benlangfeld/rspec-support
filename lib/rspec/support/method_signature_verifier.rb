@@ -63,9 +63,12 @@ module RSpec
           given_kw_args - @allowed_kw_args
         end
 
-        def has_kw_args_in?(args)
+        def has_kw_args_in?(args, allow_matchers = false)
           return false unless Hash === args.last ||
-                              RSpec::Support.is_a_matcher?(args.last)
+                              (
+                                allow_matchers &&
+                                RSpec::Support.is_a_matcher?(args.last)
+                              )
           return false if args.count <= min_non_kw_args
 
           @allows_any_kw_args || @allowed_kw_args.any?
@@ -153,14 +156,15 @@ module RSpec
     #
     # @private
     class MethodSignatureVerifier
-      attr_reader :non_kw_args, :kw_args
+      attr_reader :non_kw_args, :kw_args, :allow_matchers
 
-      def initialize(signature, args)
+      def initialize(signature, args, opts = {:allow_matchers => false})
         @signature = signature
+        @allow_matchers = opts[:allow_matchers]
         @non_kw_args, @kw_args = split_args(*args)
       end
 
-      def valid?
+      def valid?(allow_matchers: false)
          (@skip_kw_args || (
             missing_kw_args.empty? &&
             invalid_kw_args.empty?
@@ -201,9 +205,9 @@ module RSpec
 
       def split_args(*args)
         @skip_kw_args = false
-        kw_args = if @signature.has_kw_args_in?(args)
+        kw_args = if @signature.has_kw_args_in?(args, allow_matchers)
           x = args.pop
-          if RSpec::Support.is_a_matcher?(x)
+          if allow_matchers && RSpec::Support.is_a_matcher?(x)
             @skip_kw_args = true
             []
           else
