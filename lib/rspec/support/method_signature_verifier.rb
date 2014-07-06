@@ -1,14 +1,9 @@
 require 'rspec/support'
 RSpec::Support.require_rspec_support "ruby_features"
+RSpec::Support.require_rspec_support "matcher_definition"
 
 module RSpec
   module Support
-    # @private
-    #
-    # This method is overriden by `rspec-expectations` when it is loaded.
-    def self.is_a_matcher?(object)
-      false
-    end
 
     # Extracts info about the number of arguments and allowed/required
     # keyword args of a given method.
