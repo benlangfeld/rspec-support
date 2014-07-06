@@ -3,6 +3,13 @@ RSpec::Support.require_rspec_support "ruby_features"
 
 module RSpec
   module Support
+    # @private
+    #
+    # This method is overriden by `rspec-expectations` when it is loaded.
+    def self.is_a_matcher?(object)
+      false
+    end
+
     # Extracts info about the number of arguments and allowed/required
     # keyword args of a given method.
     #
@@ -49,7 +56,11 @@ module RSpec
         end
 
         def missing_kw_args_from(given_kw_args)
-          @required_kw_args - given_kw_args
+          if RSpec::Support.is_a_matcher?(given_kw_args)
+            []
+          else
+            @required_kw_args - given_kw_args
+          end
         end
 
         def invalid_kw_args_from(given_kw_args)
@@ -58,7 +69,8 @@ module RSpec
         end
 
         def has_kw_args_in?(args)
-          return false unless Hash === args.last
+          return false unless Hash === args.last ||
+                              RSpec::Support.is_a_matcher?(args.last)
           return false if args.count <= min_non_kw_args
 
           @allows_any_kw_args || @allowed_kw_args.any?
@@ -154,17 +166,18 @@ module RSpec
       end
 
       def valid?
-         missing_kw_args.empty? &&
-          invalid_kw_args.empty? &&
-          valid_non_kw_args?
+         (@skip_kw_args || (
+            missing_kw_args.empty? &&
+            invalid_kw_args.empty?
+           )) && valid_non_kw_args?
       end
 
       def error_message
-        if missing_kw_args.any?
+        if missing_kw_args.any? && !@skip_kw_args
           "Missing required keyword arguments: %s" % [
             missing_kw_args.join(", ")
           ]
-        elsif invalid_kw_args.any?
+        elsif invalid_kw_args.any? # && !@skip_kw_args
           "Invalid keyword arguments provided: %s" % [
             invalid_kw_args.join(", ")
           ]
@@ -192,8 +205,15 @@ module RSpec
       end
 
       def split_args(*args)
+        @skip_kw_args = false
         kw_args = if @signature.has_kw_args_in?(args)
-          args.pop.keys
+          x = args.pop
+          if RSpec::Support.is_a_matcher?(x)
+            @skip_kw_args = true
+            []
+          else
+            x.keys
+          end
         else
           []
         end
