@@ -51,11 +51,7 @@ module RSpec
         end
 
         def missing_kw_args_from(given_kw_args)
-          if RSpec::Support.is_a_matcher?(given_kw_args)
-            []
-          else
-            @required_kw_args - given_kw_args
-          end
+          @required_kw_args - given_kw_args
         end
 
         def invalid_kw_args_from(given_kw_args)
@@ -63,12 +59,10 @@ module RSpec
           given_kw_args - @allowed_kw_args
         end
 
-        def has_kw_args_in?(args, allow_matchers = false)
-          return false unless Hash === args.last ||
-                              (
-                                allow_matchers &&
-                                RSpec::Support.is_a_matcher?(args.last)
-                              )
+        def has_kw_args_in?(args, extra_kw_check = lambda {|x| false })
+          last = args.last
+
+          return false unless Hash === last || extra_kw_check.call(last)
           return false if args.count <= min_non_kw_args
 
           @allows_any_kw_args || @allowed_kw_args.any?
@@ -165,18 +159,17 @@ module RSpec
       end
 
       def valid?(allow_matchers: false)
-         (@skip_kw_args || (
-            missing_kw_args.empty? &&
-            invalid_kw_args.empty?
-           )) && valid_non_kw_args?
+        missing_kw_args.empty? &&
+          invalid_kw_args.empty? &&
+          valid_non_kw_args?
       end
 
       def error_message
-        if missing_kw_args.any? && !@skip_kw_args
+        if missing_kw_args.any?
           "Missing required keyword arguments: %s" % [
             missing_kw_args.join(", ")
           ]
-        elsif invalid_kw_args.any? # && !@skip_kw_args
+        elsif invalid_kw_args.any?
           "Invalid keyword arguments provided: %s" % [
             invalid_kw_args.join(", ")
           ]
@@ -192,22 +185,34 @@ module RSpec
 
       def valid_non_kw_args?
         actual = non_kw_args.length
-        @signature.min_non_kw_args <= actual && actual <= @signature.max_non_kw_args
+        @signature.min_non_kw_args <= actual &&
+          actual <= @signature.max_non_kw_args
       end
 
       def missing_kw_args
-        @signature.missing_kw_args_from(kw_args)
+        if skip_kw_args?
+          []
+        else
+          @signature.missing_kw_args_from(kw_args)
+        end
       end
 
       def invalid_kw_args
-        @signature.invalid_kw_args_from(kw_args)
+        if skip_kw_args?
+          []
+        else
+          @signature.invalid_kw_args_from(kw_args)
+        end
       end
 
       def split_args(*args)
         @skip_kw_args = false
-        kw_args = if @signature.has_kw_args_in?(args, allow_matchers)
+        is_matcher = lambda do |x|
+          allow_matchers && RSpec::Support.is_a_matcher?(x)
+        end
+        kw_args = if @signature.has_kw_args_in?(args, is_matcher)
           x = args.pop
-          if allow_matchers && RSpec::Support.is_a_matcher?(x)
+          if is_matcher.call(x)
             @skip_kw_args = true
             []
           else
@@ -218,6 +223,10 @@ module RSpec
         end
 
         [args, kw_args]
+      end
+
+      def skip_kw_args?
+        @skip_kw_args
       end
     end
   end
